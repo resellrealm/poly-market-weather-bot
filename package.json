@@ -1,42 +1,35 @@
 {
-  "name": "polymarket-trading-bot",
+  "name": "kalshi-kickoff",
   "version": "1.0.0",
-  "description": "Polymarket prediction market trading bot with copy trading and arbitrage capabilities",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
-    "watch": "tsc --watch",
-    "lint": "eslint src --ext .ts",
-    "test": "jest"
+    "endside": "ts-node src/monitor/run-kalshi-1-poly.ts",
+    "auto-redeem": "ts-node src/scripts/auto-redeem-copytrade.ts",
+    "build": "tsc"
   },
   "keywords": [
-    "polymarket",
-    "trading",
-    "bot",
-    "prediction-markets",
-    "arbitrage",
-    "copytrading"
+    "kalshi",
+    "prediction-market",
+    "api"
   ],
   "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "axios": "^1.6.0",
-    "dotenv": "^16.3.1",
-    "winston": "^3.11.0",
-    "ws": "^8.14.2",
-    "big.js": "^6.2.1"
-  },
+  "license": "ISC",
+  "description": "TypeScript boilerplate for Kalshi REST & WebSocket",
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "@types/ws": "^8.5.10",
-    "@typescript-eslint/eslint-plugin": "^6.13.0",
-    "@typescript-eslint/parser": "^6.13.0",
-    "eslint": "^8.54.0",
-    "jest": "^29.7.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.10.1",
+    "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.2"
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@polymarket/clob-client": "^5.2.1",
+    "@safe-global/protocol-kit": "^6.1.2",
+    "@safe-global/types-kit": "^3.0.0",
+    "dotenv": "^17.2.3",
+    "ethers": "^5.7.2",
+    "express": "^4.21.2",
+    "kalshi-typescript": "^3.5.0",
+    "ws": "^8.18.0"
   }
 }
-

@@ -1,107 +1,101 @@
-# Polymarket Trading Bot
+# Kalshi TypeScript kickoff
 
-A lightweight **TypeScript/Node.js trading bot** for **Polymarket prediction markets**, supporting **copy trading** and **arbitrage strategies** with configurable risk controls.
+TypeScript boilerplate for the [Kalshi](https://kalshi.com) API: REST (via official SDK) and optional WebSocket/Express server.
 
----
-
-## Features
-
-* Core trading functionality (orders, positions, balances)
-* Copy trading from selected high-performing traders
-* Arbitrage detection across markets
-* Environment-based configuration
-* Built-in logging, retries, and graceful shutdown
-
----
-
-## Requirements
-
-* Node.js **18+**
-* npm or yarn
-* Polymarket API credentials
-* Funded wallet address
-
----
-
-## Installation
+## Setup
 
 ```bash
-git clone https://github.com/michalstefanow/polymarket-trading-bot.git
-cd polymarket-trading-bot
+cp .env.sample .env
+# Edit .env: set KALSHI_API_KEY and either KALSHI_PRIVATE_KEY_PATH or KALSHI_PRIVATE_KEY_PEM
 npm install
-cp .env.example .env
 ```
 
-Configure your `.env` file with API keys and settings.
+## Scripts
 
----
+- **`npm run run`** – Run the main script (e.g. fetch balance via REST).
+- **`npm run bot`** – Run the Bitcoin up/down trading bot (see below).
+- **`npm run monitor`** – Run real-time price monitor for UP/DOWN best bid/ask (see below).
+- **`npm start`** – Start the Express server (default port 5000).
+- **`npm run build`** – Compile TypeScript to `dist/`.
 
-## Configuration (Key Variables)
+## Environment
 
-* `POLYMARKET_API_KEY`
-* `POLYMARKET_PRIVATE_KEY`
-* `ACCOUNT_ADDRESS`
-* `COPY_TRADING_ENABLED`
-* `ARBITRAGE_ENABLED`
-* `TRADER_ADDRESSES`
-* `MIN_CONFIDENCE`
-* `MIN_PROFIT_MARGIN`
-* `MAX_POSITION_SIZE`
-* `LOG_LEVEL`
+| Variable | Description |
+|----------|-------------|
+| `KALSHI_API_KEY` | Your Kalshi API key id. |
+| `KALSHI_PRIVATE_KEY_PATH` | Path to your RSA private key `.pem` file. |
+| `KALSHI_PRIVATE_KEY_PEM` | Alternatively, the PEM string (e.g. from a secret manager). |
+| `KALSHI_DEMO` | Set to `true` to use the demo API. |
+| `KALSHI_BASE_PATH` | Optional override for API base URL. |
 
----
+## Real-time price monitor
 
-## Bot Modes
+Monitor best bid/ask for **UP (YES)** and **DOWN (NO)** tokens on the first open Bitcoin 15m market. Use this to decide which side to buy for profit.
 
-### Copy Trading
+**Env vars**
 
-Automatically mirrors trades from specified traders when confidence and risk limits are met.
+| Variable | Description |
+|----------|-------------|
+| `KALSHI_MONITOR_INTERVAL_MS` | Poll interval in ms (default 2000). |
+| `KALSHI_MONITOR_TICKER` | Optional market ticker; if unset, uses first open KXBTC15M market. |
 
-Key settings:
+**Example**
 
-* `TRADER_ADDRESSES`
-* `MIN_CONFIDENCE`
-* `MAX_POSITION_SIZE`
-
-### Arbitrage
-
-Scans markets for price discrepancies and executes trades when profit thresholds are reached.
-
-Key settings:
-
-* `MIN_PROFIT_MARGIN`
-* `ARBITRAGE_CHECK_INTERVAL`
-
----
-
-## Project Structure
-
-```
-src/
-├── bots/        # Trading strategies
-├── services/    # Polymarket API client
-├── config/      # Configuration loader
-├── utils/       # Logger & helpers
-└── index.ts     # Entry point
+```bash
+npm run monitor
+# [KXBTC15M-26FEB021130-30] UP   bid=0.54 ask=0.56  |  DOWN bid=0.44 ask=0.46  |  last=0.56  @ ...
 ```
 
----
+**In code:** use `startDualPriceMonitor` and `formatDualPricesLine` from `./monitor` for dual Kalshi + Polymarket monitoring; the monitor exposes `DualMarketPrices` for building buy logic (e.g. buy UP when up ask &lt; threshold).
 
-## Security Notes
+## Bitcoin up/down trading bot
 
-* Never commit `.env` or private keys
-* Use a dedicated wallet for automation
-* Rotate API keys regularly
+The bot trades only on **Bitcoin 15-minute price up/down** markets (series `KXBTC15M`). It places **one order only**, on the first open market.
 
----
+**Bot env vars**
 
-## Contact
+| Variable | Description |
+|----------|-------------|
+| `KALSHI_BOT_SIDE` | `yes` (buy up) or `no` (buy down). Default: `yes`. |
+| `KALSHI_BOT_PRICE_CENTS` | Limit price in cents (1–99). Default: `50`. |
+| `KALSHI_BOT_CONTRACTS` | Contracts per order. Default: `1`. |
+| `KALSHI_BOT_MAX_MARKETS` | Max markets to fetch when picking the first one (default 15). |
+| `KALSHI_BOT_DRY_RUN` | Set to `true` to log only, no real orders. |
 
-* Telegram: [@mooneagle](https://t.me/mooneagle1_1)
-* WhatsApp: +44 7832 607596
+**Examples**
 
----
+```bash
+# Dry run (no orders)
+KALSHI_BOT_DRY_RUN=true npm run bot
 
-## Disclaimer
+# Buy YES (up) at 50¢ — one order on first open market
+npm run bot
 
-This project is for educational purposes only. Trading involves financial risk. Use at your own discretion.
+# Buy NO (down) at 45¢, 2 contracts — one order only
+KALSHI_BOT_SIDE=no KALSHI_BOT_PRICE_CENTS=45 KALSHI_BOT_CONTRACTS=2 npm run bot
+```
+
+## Order placement (Kalshi + Polymarket)
+
+Both platforms support limit buy orders. Import from the modules directly for minimal startup.
+
+### Kalshi
+
+- **Function:** `placeOrder(ticker, side, count, priceCents)` from `./bot`.
+- **Parameters:** `ticker` (e.g. `KXBTC15M-24JAN15`), `side` (`"yes"` | `"no"`), `count` (contracts), `priceCents` (1–99).
+- **Env:** `KALSHI_API_KEY`, `KALSHI_PRIVATE_KEY_PEM` or `KALSHI_PRIVATE_KEY_PATH`; for bot defaults: `KALSHI_BOT_SIDE`, `KALSHI_BOT_PRICE_CENTS`, `KALSHI_BOT_CONTRACTS`, `KALSHI_BOT_DRY_RUN`.
+
+### Polymarket (ww-style)
+
+- **Function:** `placePolymarketOrder(tokenId, price, size, options?)` from `./polymarket-order`.
+- **Parameters:** `tokenId` (CLOB token ID from Gamma/slug), `price` (0–1), `size` (shares). Optional `options`: `{ tickSize?: "0.01" | "0.001" | "0.0001", negRisk?: boolean }`.
+- **Env (required to place):** `POLYMARKET_PRIVATE_KEY`, `POLYMARKET_PROXY`.
+- **Env (optional, same names as ww):** `POLYMARKET_TICK_SIZE` or `COPYTRADE_TICK_SIZE`, `POLYMARKET_NEG_RISK` or `COPYTRADE_NEG_RISK`, `POLYMARKET_CLOB_URL` or `CLOB_API_URL`, `POLYMARKET_CHAIN_ID` or `CHAIN_ID`. Optional `POLYMARKET_CREDENTIAL_PATH` to a JSON file with `key`, `secret`, `passphrase` (avoids createOrDeriveApiKey per run).
+
+The arb script uses both: when the sum of opposite sides is in range it places one Kalshi order and one Polymarket order in parallel (see `src/arb.ts` and env `ARB_*`, `ARB_POLY_SIZE`).
+
+## Docs
+
+- [Kalshi API](https://docs.kalshi.com/)
+- [TypeScript SDK quick start](https://docs.kalshi.com/sdks/typescript/quickstart)
+- [WebSockets](https://docs.kalshi.com/websockets/websocket-connection)
