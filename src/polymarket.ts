@@ -1,0 +1,51 @@
+import axios from "axios";
+import { warn } from "./colors";
+
+export interface PolymarketEvent {
+  id: string;
+  endDate?: string;
+  end_date_iso?: string;
+  markets?: PolymarketMarket[];
+  [key: string]: any;
+}
+
+export interface PolymarketMarket {
+  id: string;
+  question: string;
+  outcomePrices?: string;
+  [key: string]: any;
+}
+
+export async function getPolymarketEvent(
+  citySlug: string,
+  month: string,
+  day: number,
+  year: number
+): Promise<PolymarketEvent | null> {
+  const slug = `highest-temperature-in-${citySlug}-on-${month}-${day}-${year}`;
+  const url = `https://gamma-api.polymarket.com/events?slug=${slug}`;
+  try {
+    const r = await axios.get(url, { timeout: 10000 });
+    const data = r.data;
+    if (Array.isArray(data) && data.length > 0) {
+      return data[0] as PolymarketEvent;
+    }
+  } catch (e) {
+    warn(`Polymarket API error: ${String(e)}`);
+  }
+  return null;
+}
+
+export async function getMarketYesPrice(marketId: string): Promise<number | null> {
+  const url = `https://gamma-api.polymarket.com/markets/${marketId}`;
+  try {
+    const r = await axios.get(url, { timeout: 5000 });
+    const pricesStr = r.data?.outcomePrices ?? "[0.5,0.5]";
+    const prices = JSON.parse(pricesStr) as number[];
+    const currentPrice = Number(prices[0]);
+    return isFinite(currentPrice) ? currentPrice : null;
+  } catch {
+    return null;
+  }
+}
+

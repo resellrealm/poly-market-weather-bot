@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Weatherbot TS · Simulation</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f5f5f7;
+  --bg-elevated: #ffffff;
+  --border-soft: #e0e2e7;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.06);
+  --accent-strong: rgba(37, 99, 235, 0.16);
+  --success: #16a34a;
+  --danger: #dc2626;
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.09);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: radial-gradient(circle at top, #e0ecff 0, #f5f5f7 45%, #f9fafb 100%);
+  color: var(--text-main);
+}
+
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 28px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.brand-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.brand-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: rgba(34, 197, 94, 0.06);
+  font-size: 11px;
+  color: var(--text-main);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25);
+  animation: pulse 1.4s ease-out infinite;
+}
+
+.dot.gray {
+  background: #9ca3af;
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.ts {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 960px) {
+  .stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.stat {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.stat-val {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.stat-val.red {
+  color: var(--danger);
+}
+
+.stat-val.yellow {
+  color: #d97706;
+}
+
+.stat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .main-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card,
+.panel {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.card-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid #eef1f7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.card-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chart-body {
+  padding: 14px 16px 16px;
+}
+
+.chart-wrap {
+  height: 220px;
+  position: relative;
+}
+
+.deltas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.delta {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #ecfdf3;
+  color: var(--success);
+  border: 1px solid rgba(22, 163, 74, 0.35);
+  opacity: 0;
+  transform: translateY(8px);
+  animation: floatUp 1.8s ease-out forwards;
+}
+
+.delta.neg {
+  background: #fef2f2;
+  color: var(--danger);
+  border-color: rgba(220, 38, 38, 0.35);
+}
+
+@keyframes floatUp {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-26px);
+  }
+}
+
+.scroll {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scroll::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 999px;
+}
+
+.bot-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 960px) {
+  .bot-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.trade-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid #eef1f7;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trade-item:last-child {
+  border-bottom: none;
+}
+
+.t-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 52px;
+}
+
+.t-badge {
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+
+.t-badge.buy {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+
+.t-badge.win {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.t-badge.loss {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.t-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.t-q {
+  font-size: 12px;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.t-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.t-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.t-amount {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.t-amount.pos {
+  color: var(--success);
+}
+
+.t-amount.neg {
+  color: var(--danger);
+}
+
+.pos-item {
+  padding: 11px 14px 10px;
+  border-bottom: 1px solid #eef1f7;
+}
+
+.pos-item:last-child {
+  border-bottom: none;
+}
+
+.pos-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.pos-q {
+  font-size: 12px;
+  color: var(--text-main);
+  flex: 1;
+  margin-right: 10px;
+}
+
+.pos-pnl {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pos-pnl.pos {
+  color: var(--success);
+}
+
+.pos-pnl.neg {
+  color: var(--danger);
+}
+
+.pos-bar {
+  height: 3px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.pos-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #22c55e);
+  transition: width 0.6s ease-out;
+}
+
+.pos-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pos-meta span {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.empty {
+  padding: 26px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.no-server {
+  padding: 14px 16px;
+  margin: 0 0 18px;
+  background: #fefce8;
+  border: 1px solid #facc15;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  color: #854d0e;
+}
+
+.no-server code {
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
+.footer {
+  margin-top: 14px;
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.sim-badge {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">W</div>
+      <div>
+        <div class="brand-title">Weatherbot TS</div>
+        <div class="brand-sub">Simulation dashboard · Polymarket temperature markets</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-pill">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">Waiting for data</span>
+      </div>
+      <div class="ts" id="ts">—</div>
+    </div>
+  </div>
+
+  <div id="no-server-msg" class="no-server" style="display:none;">
+    This dashboard reads <code>simulation.json</code> from the current folder.<br>
+    Start a local server in your <code>weatherbot-ts</code> directory, then refresh:
+    <br><br>
+    <code>npx http-server . -p 8000</code><br><br>
+    Then open: <code>http://localhost:8000/sim_dashboard_repost.html</code>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Balance</div>
+      <div class="stat-val" id="s-bal">—</div>
+      <div class="stat-sub">virtual USDC</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Total PnL</div>
+      <div class="stat-val" id="s-pnl">—</div>
+      <div class="stat-sub" id="s-pct">vs $1,000 start</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Open positions</div>
+      <div class="stat-val" id="s-open">—</div>
+      <div class="stat-sub">active trades</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Win rate</div>
+      <div class="stat-val yellow" id="s-wr">—</div>
+      <div class="stat-sub" id="s-wl">0W · 0L</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Total trades</div>
+      <div class="stat-val" id="s-total">—</div>
+      <div class="stat-sub">all time</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Peak balance</div>
+      <div class="stat-val" id="s-peak">—</div>
+      <div class="stat-sub">all time high</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="column">
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Balance over time</span>
+          <span class="card-badge">simulation.json</span>
+        </div>
+        <div class="chart-body">
+          <div class="chart-wrap">
+            <canvas id="chart"></canvas>
+            <div class="deltas" id="deltas"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="column">
+      <div class="panel">
+        <div class="card-head">
+          <span class="card-title">Open positions</span>
+          <span class="card-badge" id="pos-badge">0 active</span>
+        </div>
+        <div class="scroll" id="pos-list">
+          <div class="empty">Waiting for bot data…</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="card-head">
+          <span class="card-title">Recent trades</span>
+          <span class="card-badge">from simulation.json</span>
+        </div>
+        <div class="scroll" id="trade-list">
+          <div class="empty">No trades yet — run your bot with <code>--live</code>.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="card-head">
+          <span class="card-title">Kelly / EV notes</span>
+          <span class="card-badge">entries only</span>
+        </div>
+        <div class="scroll" id="ev-log">
+          <div class="empty">No entries yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>
+      Weatherbot TS · reads <code>simulation.json</code> · refreshes every 10s
+    </div>
+    <div>
+      <span class="sim-badge">Simulated balance · $1,000 start</span>
+      &nbsp;·&nbsp;
+      Built by <strong>solship</strong>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/solship" target="_blank" rel="noreferrer">GitHub</a>
+      &nbsp;·&nbsp;
+      <a href="https://t.me/bitship1_1" target="_blank" rel="noreferrer">Telegram</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const fmt2=v=>(v>=0?'+':'')+v.toFixed(2);
+const fmtUSD=v=>'$'+Math.abs(v).toFixed(2);
+const now=()=>new Date().toLocaleTimeString('en-US',{hour12:false});
+const rand=(a,b)=>Math.random()*(b-a)+a;
+
+let prevBal=null, chart=null, balHistory=[], timeLabels=[];
+
+// Init chart
+chart=new Chart(document.getElementById('chart'),{
+  type:'line',
+  data:{labels:[],datasets:[{data:[],borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.08)',fill:true,tension:.35,pointRadius:0,borderWidth:2}]},
+  options:{
+    responsive:true,
+    maintainAspectRatio:false,
+    animation:{duration:350},
+    plugins:{
+      legend:{display:false},
+      tooltip:{
+        backgroundColor:'#111827',
+        borderColor:'#4b5563',
+        borderWidth:1,
+        padding:8,
+        cornerRadius:6,
+        callbacks:{label:c=>'$'+c.parsed.y.toFixed(2)}
+      }
+    },
+    scales:{
+      x:{
+        ticks:{color:'#9ca3af',font:{family:'Inter',size:10},maxTicksLimit:8},
+        grid:{color:'#e5e7eb'}
+      },
+      y:{
+        ticks:{color:'#9ca3af',font:{family:'Inter',size:10}},
+        grid:{color:'#e5e7eb'}
+      }
+    }
+  }
+});
+
+function spawnDelta(v){
+  const l=document.getElementById('deltas');
+  const e=document.createElement('div');
+  e.className='delta '+(v>=0?'':'neg');
+  e.textContent=(v>=0?'+$':'-$')+Math.abs(v).toFixed(2);
+  e.style.left=rand(30,Math.max(30,l.offsetWidth-120))+'px';
+  e.style.top=rand(l.offsetHeight*.3,l.offsetHeight*.7)+'px';
+  l.appendChild(e);
+  setTimeout(()=>e.remove(),1800);
+}
+
+function renderPositions(positions){
+  const el=document.getElementById('pos-list');
+  const keys=Object.keys(positions);
+  document.getElementById('pos-badge').textContent=keys.length+' active';
+  if(!keys.length){el.innerHTML='<div class="empty">No open positions.</div>';return;}
+  el.innerHTML=Object.entries(positions).map(([id,p])=>{
+    const pnl=p.pnl||0;
+    const pct=(p.current_price||p.entry_price)*100;
+    return`<div class="pos-item">
+      <div class="pos-top">
+        <div class="pos-q">${(p.question||'').substr(0,80)}${(p.question||'').length>80?'…':''}</div>
+        <div class="pos-pnl ${pnl>=0?'pos':'neg'}">${pnl>=0?'+':'-'}$${Math.abs(pnl).toFixed(2)}</div>
+      </div>
+      <div class="pos-bar"><div class="pos-fill" style="width:${Math.min(100,pct)}%"></div></div>
+      <div class="pos-meta">
+        <div>${p.location||''} · ${p.date||''}</div>
+        <div>Kelly <span>${((p.kelly_pct||0)*100).toFixed(1)}%</span></div>
+        <div>EV <span>${fmt2(p.ev||0)}</span> per $1</div>
+        <div>Size <span>$${(p.cost||0).toFixed(2)}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTrades(trades){
+  const el=document.getElementById('trade-list');
+  if(!trades||!trades.length){
+    el.innerHTML='<div class="empty">No trades yet — run your bot with <code>--live</code>.</div>';
+    return;
+  }
+  const recent=[...trades].reverse().slice(0,15);
+  el.innerHTML=recent.map(t=>{
+    const isEntry=t.type==='entry';
+    const isWin=t.type==='exit'&&(t.pnl||0)>0;
+    const cls=isEntry?'buy':isWin?'win':'loss';
+    const label=isEntry?'BUY':isWin?'WIN':'LOSS';
+    const amtStr=isEntry?`-$${(t.cost||0).toFixed(2)}`:(t.pnl||0)>=0?`+$${(t.pnl||0).toFixed(2)}`:`-$${Math.abs(t.pnl||0).toFixed(2)}`;
+    const amtCls=isEntry?'neg':(t.pnl||0)>=0?'pos':'neg';
+    const time=(t.opened_at||t.closed_at||'').substr(11,5)||'—';
+    return`<div class="trade-item">
+      <div class="t-time">${time}</div>
+      <span class="t-badge ${cls}">${label}</span>
+      <div class="t-info">
+        <div class="t-q">${(t.question||'').substr(0,70)}${(t.question||'').length>70?'…':''}</div>
+        <div class="t-meta">Kelly ${((t.kelly_pct||0)*100).toFixed(1)}% · EV ${fmt2(t.ev||0)}</div>
+      </div>
+      <div class="t-right"><div class="t-amount ${amtCls}">${amtStr}</div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderEvLog(trades){
+  const el=document.getElementById('ev-log');
+  const entries=(trades||[]).filter(t=>t.type==='entry').reverse().slice(0,15);
+  if(!entries.length){el.innerHTML='<div class="empty">No entries yet.</div>';return;}
+  el.innerHTML=entries.map(t=>{
+    const evCol=(t.ev||0)>0?'#16a34a':'#dc2626';
+    const time=(t.opened_at||'').substr(11,5)||'—';
+    return`<div style="padding:8px 14px;border-bottom:1px solid #eef1f7;font-size:11px;">
+      <div style="color:#6b7280">${time} · ${t.location||''} · ${t.date||''}</div>
+      <div style="color:#111827;margin-top:2px">Entry $${(t.entry_price||0).toFixed(3)} · Our prob ${(t.our_prob||0*100).toFixed?((t.our_prob||0)*100).toFixed(0):'0'}%</div>
+      <div style="margin-top:3px;color:#4b5563">
+        EV <span style="color:${evCol};font-weight:500">${fmt2(t.ev||0)}</span> per $1
+        · Kelly <span style="color:#1d4ed8;font-weight:500">${((t.kelly_pct||0)*100).toFixed(1)}%</span>
+        · Size <span style="color:#111827;font-weight:500">$${(t.cost||0).toFixed(2)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadData(){
+  try {
+    const r=await fetch('simulation.json?t='+Date.now());
+    if(!r.ok)throw new Error('not found');
+
+    const sim=await r.json();
+    document.getElementById('no-server-msg').style.display='none';
+    document.getElementById('status-dot').className='dot';
+    document.getElementById('status-text').textContent='Live data';
+
+    const bal=sim.balance||1000;
+    const start=sim.starting_balance||1000;
+    const wins=sim.wins||0;
+    const losses=sim.losses||0;
+    const totalTrades=sim.total_trades||0;
+    const positions=sim.positions||{};
+    const trades=sim.trades||[];
+    const peak=sim.peak_balance||bal;
+    const openValue = Object.values(positions).reduce((s,p) => s + (p.cost||0) + (p.pnl||0), 0);
+    const total = bal + openValue;
+    const pnl = total - start;
+    const pct=pnl/start*100;
+
+    // Stats
+    document.getElementById('ts').textContent='Updated '+now();
+    document.getElementById('s-bal').textContent='$'+total.toFixed(2);
+    const pnlEl=document.getElementById('s-pnl');
+    pnlEl.textContent=(pnl>=0?'+':'')+' $'+Math.abs(pnl).toFixed(2);
+    pnlEl.className='stat-val'+(pnl<0?' red':'');
+    document.getElementById('s-pct').textContent=(pct>=0?'+':'')+pct.toFixed(1)+'% return';
+    document.getElementById('s-open').textContent=Object.keys(positions).length;
+    const wr=wins+losses>0?(wins/(wins+losses)*100).toFixed(0)+'%':'—';
+    document.getElementById('s-wr').textContent=wr;
+    document.getElementById('s-wl').textContent=wins+'W · '+losses+'L';
+    document.getElementById('s-total').textContent=totalTrades;
+    document.getElementById('s-peak').textContent='$'+peak.toFixed(2);
+
+    // Chart (uses wallet balance only for smooth line)
+    if(prevBal!==null&&Math.abs(bal-prevBal)>0.1)spawnDelta(bal-prevBal);
+    prevBal=bal;
+    balHistory.push(parseFloat(bal.toFixed(2)));
+    timeLabels.push(now());
+    if(balHistory.length>60){balHistory.shift();timeLabels.shift();}
+    chart.data.labels=[...timeLabels];
+    chart.data.datasets[0].data=[...balHistory];
+    chart.update();
+
+    renderPositions(positions);
+    renderTrades(trades);
+    renderEvLog(trades);
+
+  } catch(e) {
+    document.getElementById('status-dot').className='dot gray';
+    document.getElementById('status-text').textContent='Waiting for simulation.json';
+    document.getElementById('ts').textContent='No simulation file detected';
+    if(location.protocol==='file:'){
+      document.getElementById('no-server-msg').style.display='block';
+    }
+  }
+}
+
+loadData();
+setInterval(loadData, 10000);
+</script>
+</body>
+</html>
+

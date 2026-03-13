@@ -1,0 +1,10 @@
+{
+  "balance": 1000,
+  "starting_balance": 1000,
+  "positions": {},
+  "trades": [],
+  "total_trades": 0,
+  "wins": 0,
+  "losses": 0,
+  "peak_balance": 1000
+}
