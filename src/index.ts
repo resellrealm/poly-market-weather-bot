@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 import dotenv from "dotenv";
 import yargs from "yargs";
+import logger from "changelog-logger-wrapper";
 import { hideBin } from "yargs/helpers";
 import { BotConfig, loadConfig } from "./config";
 import { resetSim } from "./simState";
 import { run, showPositions } from "./strategy";
+import { getWalletBalanceUsd } from "./walletBalance";
 
 dotenv.config();
+
+const MIN_BALANCE_USD = 50;
 
 function validateKeys(cfg: BotConfig): void {
   const errors: string[] = [];
@@ -39,7 +43,7 @@ function validateKeys(cfg: BotConfig): void {
   }
 
   if (errors.length) {
-    console.error("\nConfiguration error:\n- " + errors.join("\n- "));
+    logger.error("\nConfiguration error:\n- " + errors.join("\n- "));
     process.exit(1);
   }
 }
@@ -84,6 +88,14 @@ async function main(): Promise<void> {
     return;
   }
 
+  const balanceUsd = await getWalletBalanceUsd(cfg.polymarket_proxy_wallet_address);
+  if (balanceUsd < MIN_BALANCE_USD) {
+    logger.error(
+      `Wallet balance ($${balanceUsd.toFixed(2)}) is below the minimum required. The minimum required balance is $${MIN_BALANCE_USD} USD to run the bot.`
+    );
+    process.exit(1);
+  }
+
   const live = Boolean(argv.live);
   const intervalMin =
     live && typeof argv.interval === "number" && argv.interval > 0
@@ -92,7 +104,7 @@ async function main(): Promise<void> {
 
   if (intervalMin > 0) {
     const intervalSec = intervalMin * 60;
-    console.log(
+    logger.info(
       `  🔄 Running every ${intervalMin.toFixed(
         1
       )} min (Ctrl+C to stop)\n`
@@ -100,7 +112,7 @@ async function main(): Promise<void> {
     // eslint-disable-next-line no-constant-condition
     while (true) {
       await run({ dryRun: !live, config: cfg });
-      console.log(
+      logger.info(
         `\n  ⏳ Next run in ${intervalMin.toFixed(1)} min...\n`
       );
       await new Promise((res) => setTimeout(res, intervalSec * 1000));
@@ -111,7 +123,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("Fatal error:", err);
+  logger.error("Fatal error:", err);
   process.exit(1);
 });
 
