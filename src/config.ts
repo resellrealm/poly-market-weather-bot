@@ -1,3 +1,6 @@
+/** Wallet signature type: 0 = EOA, 1 = Polymarket proxy (Magic), 2 = Gnosis Safe */
+export type SignatureType = 0 | 1 | 2;
+
 export interface BotConfig {
   entry_threshold: number;
   exit_threshold: number;
@@ -6,6 +9,10 @@ export interface BotConfig {
   locations: string;
   polymarket_private_key: string;
   polymarket_proxy_wallet_address: string;
+  /** Use proxy/safe wallet (funds at proxy address). If true, signature_type defaults to 2. */
+  use_proxy_wallet: boolean;
+  /** 0 = EOA, 1 = Polymarket proxy, 2 = Gnosis Safe. When use_proxy_wallet=true default is 2. */
+  signature_type: SignatureType;
 }
 
 export const DEFAULT_CONFIG: BotConfig = {
@@ -15,7 +22,9 @@ export const DEFAULT_CONFIG: BotConfig = {
   min_hours_to_resolution: 2,
   locations: "nyc,chicago,miami,dallas,seattle,atlanta",
   polymarket_private_key: "",
-  polymarket_proxy_wallet_address: ""
+  polymarket_proxy_wallet_address: "",
+  use_proxy_wallet: false,
+  signature_type: 0
 };
 
 export async function loadConfig(): Promise<BotConfig> {
@@ -45,7 +54,17 @@ export async function loadConfig(): Promise<BotConfig> {
     locations: process.env.LOCATIONS ?? DEFAULT_CONFIG.locations,
     polymarket_private_key: process.env.POLYMARKET_PRIVATE_KEY ?? "",
     polymarket_proxy_wallet_address:
-      process.env.POLYMARKET_PROXY_WALLET_ADDRESS ?? ""
+      process.env.POLYMARKET_PROXY_WALLET_ADDRESS ?? "",
+    use_proxy_wallet:
+      (process.env.USE_PROXY_WALLET ?? "").toLowerCase() === "true",
+    signature_type: (() => {
+      const raw = process.env.SIGNATURE_TYPE ?? "";
+      if (raw === "1") return 1 as SignatureType;
+      if (raw === "2") return 2 as SignatureType;
+      return (process.env.USE_PROXY_WALLET ?? "").toLowerCase() === "true"
+        ? (2 as SignatureType)
+        : (0 as SignatureType);
+    })()
   };
 }
 

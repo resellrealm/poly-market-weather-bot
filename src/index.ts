@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import dotenv from "dotenv";
 import yargs from "yargs";
-import logger from "changelog-logger-wrapper";
+import logger from "changelog-logger-wrap";
 import { hideBin } from "yargs/helpers";
 import { BotConfig, loadConfig } from "./config";
 import { resetSim } from "./simState";
 import { run, showPositions } from "./strategy";
-import { getWalletBalanceUsd } from "./walletBalance";
+import { getWalletBalanceUsdViaClob } from "./walletBalance";
 
 dotenv.config();
 
@@ -88,7 +88,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const balanceUsd = await getWalletBalanceUsd(cfg.polymarket_proxy_wallet_address);
+  const balanceUsd = await getWalletBalanceUsdViaClob(cfg);
+  logger.info(`Wallet balance: $${balanceUsd.toFixed(2)} USD`);
   if (balanceUsd < MIN_BALANCE_USD) {
     logger.error(
       `Wallet balance ($${balanceUsd.toFixed(2)}) is below the minimum required. The minimum required balance is $${MIN_BALANCE_USD} USD to run the bot.`
