@@ -7,6 +7,14 @@ export interface BotConfig {
   max_trades_per_run: number;
   min_hours_to_resolution: number;
   locations: string;
+  /** Fractional Kelly multiplier (0.25 = quarter-Kelly, 0.5 = half-Kelly). Reduces variance. */
+  kelly_fraction: number;
+  /** Maximum percentage of bankroll risked on any single trade (0.20 = 20%) */
+  max_position_pct: number;
+  /** Maximum number of concurrent open positions */
+  max_concurrent_positions: number;
+  /** Stop-loss threshold: exit if position loses this fraction of cost (0.5 = -50%) */
+  stop_loss_pct: number;
   polymarket_private_key: string;
   polymarket_proxy_wallet_address: string;
   /** Use proxy/safe wallet (funds at proxy address). If true, signature_type defaults to 2. */
@@ -18,9 +26,13 @@ export interface BotConfig {
 export const DEFAULT_CONFIG: BotConfig = {
   entry_threshold: 0.15,
   exit_threshold: 0.45,
-  max_trades_per_run: 5,
+  max_trades_per_run: 3,
   min_hours_to_resolution: 2,
   locations: "nyc,chicago,miami,dallas,seattle,atlanta",
+  kelly_fraction: 0.25,
+  max_position_pct: 0.20,
+  max_concurrent_positions: 3,
+  stop_loss_pct: 0.50,
   polymarket_private_key: "",
   polymarket_proxy_wallet_address: "",
   use_proxy_wallet: false,
@@ -52,6 +64,22 @@ export async function loadConfig(): Promise<BotConfig> {
       DEFAULT_CONFIG.min_hours_to_resolution
     ),
     locations: process.env.LOCATIONS ?? DEFAULT_CONFIG.locations,
+    kelly_fraction: parseNumber(
+      process.env.KELLY_FRACTION,
+      DEFAULT_CONFIG.kelly_fraction
+    ),
+    max_position_pct: parseNumber(
+      process.env.MAX_POSITION_PCT,
+      DEFAULT_CONFIG.max_position_pct
+    ),
+    max_concurrent_positions: parseNumber(
+      process.env.MAX_CONCURRENT_POSITIONS,
+      DEFAULT_CONFIG.max_concurrent_positions
+    ),
+    stop_loss_pct: parseNumber(
+      process.env.STOP_LOSS_PCT,
+      DEFAULT_CONFIG.stop_loss_pct
+    ),
     polymarket_private_key: process.env.POLYMARKET_PRIVATE_KEY ?? "",
     polymarket_proxy_wallet_address:
       process.env.POLYMARKET_PROXY_WALLET_ADDRESS ?? "",

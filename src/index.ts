@@ -10,7 +10,7 @@ import { getWalletBalanceUsdViaClob } from "./walletBalance";
 
 dotenv.config();
 
-const MIN_BALANCE_USD = 50;
+const MIN_BALANCE_USD = 5;
 
 function validateKeys(cfg: BotConfig): void {
   const errors: string[] = [];
@@ -70,7 +70,7 @@ async function main(): Promise<void> {
     .option("reset", {
       type: "boolean",
       default: false,
-      describe: "Reset simulation to $1000"
+      describe: "Reset simulation to $38"
     })
     .help()
     .parseAsync();

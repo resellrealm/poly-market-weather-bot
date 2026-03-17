@@ -3,7 +3,7 @@ import path from "path";
 import { ok } from "./colors";
 
 const SIM_FILE = path.resolve(__dirname, "..", "simulation.json");
-const SIM_BALANCE = 1000.0;
+const SIM_BALANCE = 38.0;
 
 export interface Position {
   question: string;

@@ -1,7 +1,11 @@
 {
   "entry_threshold": 0.15,
   "exit_threshold": 0.45,
-  "max_trades_per_run": 5,
+  "max_trades_per_run": 3,
   "min_hours_to_resolution": 2,
-  "locations": "nyc,chicago,miami,dallas,seattle,atlanta"
+  "locations": "nyc,chicago,miami,dallas,seattle,atlanta",
+  "kelly_fraction": 0.25,
+  "max_position_pct": 0.20,
+  "max_concurrent_positions": 3,
+  "stop_loss_pct": 0.50
 }
