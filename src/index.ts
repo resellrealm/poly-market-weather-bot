@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 import dotenv from "dotenv";
 import yargs from "yargs";
-import logger from "changelog-logger-wrap";
+import logger from "terminal-structured-logger";
 import { hideBin } from "yargs/helpers";
 import { BotConfig, loadConfig } from "./config";
 import { resetSim } from "./simState";
 import { run, showPositions } from "./strategy";
 import { getWalletBalanceUsdViaClob } from "./walletBalance";
+import { installClobProxy } from "./proxy";
 
 dotenv.config();
+
+// Route CLOB API requests through Mullvad Ireland SOCKS5 proxy
+installClobProxy();
 
 const MIN_BALANCE_USD = 5;
 
