@@ -13,6 +13,8 @@ export interface PolymarketMarket {
   id: string;
   question: string;
   outcomePrices?: string;
+  clobTokenIds?: string;
+  conditionId?: string;
   [key: string]: any;
 }
 

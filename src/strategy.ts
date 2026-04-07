@@ -8,6 +8,8 @@ import {
   getPolymarketEvent,
   getMarketYesPrice
 } from "./polymarket";
+import { placeBuyOrder, placeSellOrder } from "./trading";
+import { notify } from "./notify";
 import {
   Position,
   SimulationState,
@@ -27,15 +29,34 @@ export interface RunOptions {
  * given our NWS forecast point estimate. Uses a normal distribution approximation
  * with NWS typical forecast error (~3°F for 1-day, scaling up for further out).
  */
+/** Seasonal multiplier for forecast error — winter is harder to predict */
+function getSeasonalMultiplier(): number {
+  const month = new Date().getMonth(); // 0-11
+  // Dec/Jan/Feb: +25-30%, Jun/Jul/Aug: -15-20%, shoulders: transitional
+  const factors = [1.3, 1.3, 1.2, 1.1, 1.0, 0.85, 0.8, 0.85, 1.0, 1.1, 1.2, 1.3];
+  return factors[month];
+}
+
+/** Regional forecast error factor — coastal cities are more predictable */
+const REGIONAL_ERROR_FACTOR: Record<string, number> = {
+  nyc: 1.0, chicago: 1.15, miami: 0.85, dallas: 1.1,
+  seattle: 0.9, atlanta: 1.0
+};
+
 function estimateProbability(
   forecastTemp: number,
   range: [number, number],
-  hoursOut: number
+  hoursOut: number,
+  citySlug?: string
 ): number {
   // NWS forecast standard error increases with time horizon
-  // ~2°F for same-day, ~3°F for next-day, ~5°F for 2-3 days out
   const daysOut = Math.max(0, hoursOut / 24);
-  const stdError = 2 + daysOut * 1.2;
+  const baseError = 2 + daysOut * 1.0;
+
+  // Apply seasonal and regional adjustments
+  const seasonal = getSeasonalMultiplier();
+  const regional = REGIONAL_ERROR_FACTOR[citySlug ?? ""] ?? 1.0;
+  const stdError = baseError * seasonal * regional;
 
   // Use normal CDF approximation to estimate P(temp in [low, high])
   const zLow = (range[0] - forecastTemp) / stdError;
@@ -208,6 +229,18 @@ export async function run(options: RunOptions): Promise<void> {
       );
 
       if (!dryRun) {
+        // Place real sell order if we have a token ID
+        const tokenId = (pos as any).token_id;
+        let sellOrderId: string | null = null;
+        if (tokenId && pos.shares > 0) {
+          ok(`Placing REAL SELL (stop-loss): ${pos.shares.toFixed(1)} shares @ $${currentPrice.toFixed(3)}`);
+          sellOrderId = await placeSellOrder(config, tokenId, currentPrice, pos.shares);
+        }
+        // If sell order failed, do NOT mark position as closed
+        if (!sellOrderId) {
+          warn(`Stop-loss sell failed — keeping position open`);
+          continue;
+        }
         balance += pos.cost + pnl;
         sim.losses += 1;
         const trade: Trade = {
@@ -227,6 +260,7 @@ export async function run(options: RunOptions): Promise<void> {
         sim.trades.push(trade);
         delete positions[mid];
         ok(`Stop-loss triggered — PnL: -$${Math.abs(pnl).toFixed(2)}`);
+        notify(`🛑 *STOP-LOSS* ${pos.question.slice(0, 60)}\nEntry: $${pos.entry_price.toFixed(3)} → Now: $${currentPrice.toFixed(3)}\nLoss: -$${Math.abs(pnl).toFixed(2)} (-${(lossPct * 100).toFixed(0)}%)`);
       } else {
         skip("Paper mode — not selling");
       }
@@ -246,6 +280,18 @@ export async function run(options: RunOptions): Promise<void> {
       );
 
       if (!dryRun) {
+        // Place real sell order if we have a token ID
+        const tokenId = (pos as any).token_id;
+        let sellOrderId: string | null = null;
+        if (tokenId && pos.shares > 0) {
+          ok(`Placing REAL SELL (exit): ${pos.shares.toFixed(1)} shares @ $${currentPrice.toFixed(3)}`);
+          sellOrderId = await placeSellOrder(config, tokenId, currentPrice, pos.shares);
+        }
+        // If sell order failed, do NOT mark position as closed
+        if (!sellOrderId) {
+          warn(`Exit sell failed — keeping position open`);
+          continue;
+        }
         balance += pos.cost + pnl;
         if (pnl > 0) sim.wins += 1;
         else sim.losses += 1;
@@ -268,6 +314,8 @@ export async function run(options: RunOptions): Promise<void> {
         ok(
           `Closed — PnL: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}`
         );
+        const emoji = pnl >= 0 ? "✅" : "📉";
+        notify(`${emoji} *EXIT* ${pos.question.slice(0, 60)}\nEntry: $${pos.entry_price.toFixed(3)} → Exit: $${currentPrice.toFixed(3)}\nPnL: ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`);
       } else {
         skip("Paper mode — not selling");
       }
@@ -297,7 +345,7 @@ export async function run(options: RunOptions): Promise<void> {
       const forecast: DailyForecast = await getForecast(citySlug);
       if (!forecast || Object.keys(forecast).length === 0) continue;
 
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 7; i++) {
         const date = new Date();
         date.setDate(date.getDate() + i);
         const dateStr = date.toISOString().slice(0, 10);
@@ -329,82 +377,77 @@ export async function run(options: RunOptions): Promise<void> {
         }
 
         // Find matching temperature bucket
-        let matched:
-          | {
-              market: PolymarketMarket;
-              question: string;
-              price: number;
-              range: [number, number];
-            }
-          | null = null;
+        // Evaluate ALL buckets in this event to find the best EV opportunity
+        type Candidate = {
+          market: PolymarketMarket;
+          question: string;
+          price: number;
+          range: [number, number];
+          yesTokenId: string | null;
+          ourProb: number;
+          ev: number;
+          kellyPct: number;
+        };
+        const candidates: Candidate[] = [];
 
         for (const market of event.markets ?? []) {
           const question = market.question ?? "";
           const rng = parseTempRange(question);
-          if (rng && rng[0] <= forecastTemp && forecastTemp <= rng[1]) {
-            try {
-              const pricesStr = market.outcomePrices ?? "[0.5,0.5]";
-              const prices = JSON.parse(pricesStr) as number[];
-              const yesPrice = Number(prices[0]);
-              if (!isFinite(yesPrice)) continue;
-              matched = {
-                market,
-                question,
-                price: yesPrice,
-                range: rng
-              };
-            } catch {
-              continue;
+          if (!rng) continue;
+          try {
+            const pricesStr = market.outcomePrices ?? "[0.5,0.5]";
+            const prices = JSON.parse(pricesStr) as number[];
+            const yesPrice = Number(prices[0]);
+            if (!isFinite(yesPrice) || yesPrice <= 0 || yesPrice >= 1) continue;
+            if (yesPrice >= config.entry_threshold) continue;
+
+            const prob = estimateProbability(forecastTemp, rng, hoursLeft, citySlug);
+            const evVal = expectedValue(prob, yesPrice);
+            const kelly = kellyFraction(prob, yesPrice, config.kelly_fraction);
+
+            if (evVal > 0 && kelly > 0) {
+              let yesTokenId: string | null = null;
+              try {
+                const tokenIds = JSON.parse(market.clobTokenIds ?? "[]");
+                if (Array.isArray(tokenIds) && tokenIds.length > 0) {
+                  yesTokenId = tokenIds[0];
+                }
+              } catch { /* ignore */ }
+
+              candidates.push({
+                market, question, price: yesPrice, range: rng,
+                yesTokenId, ourProb: prob, ev: evVal, kellyPct: kelly
+              });
             }
-            break;
-          }
+          } catch { continue; }
         }
 
-        if (!matched) {
-          skip(`No bucket found for ${forecastTemp}°F`);
+        // Pick the best candidate by EV
+        if (candidates.length === 0) {
+          skip(`No positive-EV buckets for ${forecastTemp}°F forecast`);
           continue;
         }
 
-        const price = matched.price;
-        const marketId = matched.market.id;
-        const question = matched.question;
+        candidates.sort((a, b) => b.ev - a.ev);
+        const best = candidates[0];
+        const matched = best;
+        const price = best.price;
+        const marketId = best.market.id;
+        const question = best.question;
+        const ourProb = best.ourProb;
+        const ev = best.ev;
+        const kellyPct = best.kellyPct;
 
         info(`Bucket: ${question.slice(0, 60)}`);
-        info(`Market price: $${price.toFixed(3)}`);
-
-        if (price >= config.entry_threshold) {
-          skip(
-            `Price $${price.toFixed(
-              3
-            )} above threshold $${config.entry_threshold.toFixed(2)}`
-          );
-          continue;
-        }
-
-        // Estimate probability using NWS forecast + normal distribution
-        const ourProb = estimateProbability(forecastTemp, matched.range, hoursLeft);
-        const ev = expectedValue(ourProb, price);
-        const kellyPct = kellyFraction(ourProb, price, config.kelly_fraction);
-
+        info(`Market price: $${price.toFixed(3)}${candidates.length > 1 ? ` (best of ${candidates.length} candidates)` : ""}`);
         info(
           `P(win): ${(ourProb * 100).toFixed(1)}% | EV: $${ev.toFixed(3)} | Kelly: ${(kellyPct * 100).toFixed(1)}%`
         );
 
-        // Only enter if we have positive expected value
-        if (ev <= 0) {
-          skip(`Negative EV ($${ev.toFixed(3)}) — no edge`);
-          continue;
-        }
-
-        if (kellyPct <= 0) {
-          skip("Kelly says don't bet — no edge");
-          continue;
-        }
-
         // Position sizing: min of Kelly fraction and max_position_pct cap
         const cappedPct = Math.min(kellyPct, config.max_position_pct);
-        const positionSize = Number((balance * cappedPct).toFixed(2));
-        const shares = positionSize / price;
+        let positionSize = Number((balance * cappedPct).toFixed(2));
+        let shares = positionSize / price;
 
         ok(
           `SIGNAL — Kelly ${(kellyPct * 100).toFixed(1)}% (capped ${(cappedPct * 100).toFixed(1)}%) → $${positionSize.toFixed(2)} for ${shares.toFixed(1)} shares @ $${price.toFixed(3)}`
@@ -425,12 +468,36 @@ export async function run(options: RunOptions): Promise<void> {
           continue;
         }
 
-        if (positionSize < 0.5) {
-          skip(`Position size $${positionSize.toFixed(2)} too small (min $0.50)`);
-          continue;
+        // Polymarket minimum order is 5 shares — round up if affordable
+        if (shares < 5) {
+          const minCost = 5 * price;
+          if (minCost <= balance * 0.5 && ev > 0) {
+            shares = 5;
+            positionSize = Number(minCost.toFixed(2));
+            info(`Rounded up to 5 shares (min order) — cost $${positionSize.toFixed(2)}`);
+          } else {
+            skip(`Order size ${shares.toFixed(1)} shares too small and can't afford min`);
+            continue;
+          }
         }
 
         if (!dryRun) {
+          // Place real order on Polymarket CLOB
+          let orderId: string | null = null;
+          if (matched.yesTokenId) {
+            ok(`Placing REAL BUY order: ${shares.toFixed(1)} shares @ $${price.toFixed(3)} (token: ${matched.yesTokenId.slice(0, 12)}...)`);
+            orderId = await placeBuyOrder(config, matched.yesTokenId, price, shares);
+          } else {
+            warn(`No token ID for market — skipping (cannot trade without token)`);
+            continue;
+          }
+
+          // If the order failed, do NOT track the position or deduct balance
+          if (!orderId) {
+            warn(`Buy order returned null — not tracking position or deducting balance`);
+            continue;
+          }
+
           balance -= positionSize;
           const pos: Position = {
             question,
@@ -445,6 +512,8 @@ export async function run(options: RunOptions): Promise<void> {
             ev,
             our_prob: ourProb
           };
+          (pos as any).order_id = orderId;
+          (pos as any).token_id = matched.yesTokenId;
           positions[marketId] = pos;
           sim.total_trades += 1;
           const trade: Trade = {
@@ -462,11 +531,8 @@ export async function run(options: RunOptions): Promise<void> {
           };
           sim.trades.push(trade);
           tradesExecuted += 1;
-          ok(
-            `Position opened — $${positionSize.toFixed(
-              2
-            )} deducted from balance`
-          );
+          ok(`LIVE order placed — ID: ${orderId} — $${positionSize.toFixed(2)} committed`);
+          notify(`📈 *BUY* ${shares.toFixed(1)} shares @ $${price.toFixed(3)}\n${question.slice(0, 80)}\nKelly: ${(kellyPct * 100).toFixed(1)}% | EV: $${ev.toFixed(3)}\nCost: $${positionSize.toFixed(2)} | Order: ${orderId}`);
         } else {
           skip("Paper mode — not buying");
           tradesExecuted += 1;
@@ -501,5 +567,11 @@ export async function run(options: RunOptions): Promise<void> {
         "[PAPER MODE — use --live to simulate trades]"
       )}`
     );
+  }
+
+  // Send summary notification (live mode only, and only if something happened)
+  if (!dryRun && (tradesExecuted > 0 || exitsFound > 0)) {
+    const openCount = Object.keys(positions).length;
+    notify(`🤖 *Bot Run Summary*\nBalance: $${balance.toFixed(2)}\nTrades: ${tradesExecuted} | Exits: ${exitsFound}\nOpen: ${openCount}/${config.max_concurrent_positions}\nW/L: ${sim.wins}/${sim.losses}`);
   }
 }
